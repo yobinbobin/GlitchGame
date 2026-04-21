@@ -70,14 +70,7 @@ Timer (например, 60 FPS)
 Сделать расширяемую систему глюков
 
 📌 Что сделать:
-1. Интерфейс глюков
-interface IGlitch
-{
-    void Apply(Player player);
-    void Update();
-    void Remove();
-}
-2. GlitchManager
+1. GlitchManager
 список активных глюков
 добавление / удаление
 обновление
