@@ -1,0 +1,259 @@
+using System.Collections.Generic;
+using System.Drawing;
+using System.Windows.Forms;
+using Timer = System.Windows.Forms.Timer;
+
+namespace GlitchGame_WF
+{
+    public partial class Form1 : Form
+    {
+        private enum GameUiState
+        {
+            StartScreen,
+            Playing,
+            Paused
+        }
+
+        private Controller.GameController _gameController;
+        private HashSet<Keys> _pressedKeys = new HashSet<Keys>();
+        private Timer _timer;
+        private GameUiState _uiState = GameUiState.StartScreen;
+        private Rectangle _startButtonBounds = Rectangle.Empty;
+        private Rectangle _restartButtonBounds = Rectangle.Empty;
+
+        public Form1()
+        {
+            InitializeComponent();
+            KeyPreview = true;
+
+            _gameController = new Controller.GameController();
+
+            _timer = new Timer { Interval = 16 };
+            _timer.Tick += GameLoop;
+            _timer.Start();
+        }
+
+        private void GameLoop(object? sender, EventArgs e)
+        {
+            if (_uiState != GameUiState.Playing)
+            {
+                Invalidate();
+                return;
+            }
+
+            _gameController.HandleInput(_pressedKeys);
+            _gameController.Update();
+
+            if (_gameController.CheckWin())
+            {
+                _gameController.NextLevel();
+            }
+
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.Clear(Color.Black);
+
+            if (_uiState == GameUiState.StartScreen)
+            {
+                DrawStartScreen(e.Graphics);
+                return;
+            }
+
+            _gameController.Draw(e.Graphics);
+            DrawMovementHints(e.Graphics);
+
+            if (_uiState == GameUiState.Paused)
+            {
+                DrawPauseMenu(e.Graphics);
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+
+            if (_uiState == GameUiState.StartScreen && _startButtonBounds.Contains(e.Location))
+            {
+                StartNewGame();
+                return;
+            }
+
+            if (_uiState == GameUiState.Paused && _restartButtonBounds.Contains(e.Location))
+            {
+                _gameController.RestartCurrentLevel();
+                _pressedKeys.Clear();
+                _uiState = GameUiState.Playing;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+
+            if (e.KeyCode == Keys.Escape)
+            {
+                TogglePause();
+                return;
+            }
+
+            if (_uiState == GameUiState.StartScreen && (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space))
+            {
+                StartNewGame();
+                return;
+            }
+
+            if (_uiState != GameUiState.Playing)
+                return;
+
+            _pressedKeys.Add(e.KeyCode);
+        }
+
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            base.OnKeyUp(e);
+            _pressedKeys.Remove(e.KeyCode);
+        }
+
+        private void StartNewGame()
+        {
+            _gameController.StartFromFirstLevel();
+            _pressedKeys.Clear();
+            _uiState = GameUiState.Playing;
+            Invalidate();
+        }
+
+        private void TogglePause()
+        {
+            if (_uiState == GameUiState.StartScreen)
+                return;
+
+            if (_uiState == GameUiState.Playing)
+            {
+                _pressedKeys.Clear();
+                _uiState = GameUiState.Paused;
+            }
+            else if (_uiState == GameUiState.Paused)
+            {
+                _uiState = GameUiState.Playing;
+            }
+
+            Invalidate();
+        }
+
+        private void DrawMovementHints(Graphics g)
+        {
+            const int keySize = 34;
+            const int spacing = 8;
+            const int margin = 10;
+
+            int panelWidth = keySize * 3 + spacing * 2;
+            int panelX = ClientSize.Width - panelWidth - margin;
+            int topY = margin;
+
+            DrawArrowKey(g, panelX + keySize + spacing, topY, keySize, "↑", IsUpPressed());
+            DrawArrowKey(g, panelX, topY + keySize + spacing, keySize, "←", IsLeftPressed());
+            DrawArrowKey(g, panelX + keySize + spacing, topY + keySize + spacing, keySize, "↓", IsDownPressed());
+            DrawArrowKey(g, panelX + (keySize + spacing) * 2, topY + keySize + spacing, keySize, "→", IsRightPressed());
+        }
+
+        private void DrawArrowKey(Graphics g, int x, int y, int size, string arrow, bool isPressed)
+        {
+            var fillColor = isPressed ? Color.LimeGreen : Color.FromArgb(45, 45, 45);
+            var borderColor = isPressed ? Color.White : Color.Gray;
+            var textColor = isPressed ? Color.Black : Color.WhiteSmoke;
+
+            using var fillBrush = new SolidBrush(fillColor);
+            using var borderPen = new Pen(borderColor, 2);
+            using var textBrush = new SolidBrush(textColor);
+            using var font = new Font("Arial", 15, FontStyle.Bold);
+
+            var rect = new Rectangle(x, y, size, size);
+            g.FillRectangle(fillBrush, rect);
+            g.DrawRectangle(borderPen, rect);
+
+            var textSize = g.MeasureString(arrow, font);
+            float textX = x + (size - textSize.Width) / 2f;
+            float textY = y + (size - textSize.Height) / 2f - 1f;
+            g.DrawString(arrow, font, textBrush, textX, textY);
+        }
+
+        private bool IsLeftPressed() => _pressedKeys.Contains(Keys.Left) || _pressedKeys.Contains(Keys.A);
+        private bool IsRightPressed() => _pressedKeys.Contains(Keys.Right) || _pressedKeys.Contains(Keys.D);
+        private bool IsUpPressed() => _pressedKeys.Contains(Keys.Up) || _pressedKeys.Contains(Keys.W) || _pressedKeys.Contains(Keys.Space);
+        private bool IsDownPressed() => _pressedKeys.Contains(Keys.Down) || _pressedKeys.Contains(Keys.S);
+
+        private void DrawStartScreen(Graphics g)
+        {
+            using var titleFont = new Font("Arial", 30, FontStyle.Bold);
+            using var textFont = new Font("Arial", 14, FontStyle.Regular);
+            using var brush = new SolidBrush(Color.White);
+            using var hintBrush = new SolidBrush(Color.LightGray);
+
+            var title = "GLITCH PLATFORMER";
+            var subtitle = "Собери все монеты и переживи глюки уровней";
+            var titleSize = g.MeasureString(title, titleFont);
+            var subtitleSize = g.MeasureString(subtitle, textFont);
+
+            float centerX = ClientSize.Width / 2f;
+            g.DrawString(title, titleFont, brush, centerX - titleSize.Width / 2f, 140);
+            g.DrawString(subtitle, textFont, hintBrush, centerX - subtitleSize.Width / 2f, 200);
+
+            _startButtonBounds = new Rectangle((int)centerX - 110, 280, 220, 56);
+            DrawMenuButton(g, _startButtonBounds, "Начать игру");
+
+            var controlsHint = "Enter/Space - начать, Esc - пауза во время игры";
+            var controlsSize = g.MeasureString(controlsHint, textFont);
+            g.DrawString(controlsHint, textFont, hintBrush, centerX - controlsSize.Width / 2f, 370);
+        }
+
+        private void DrawPauseMenu(Graphics g)
+        {
+            using var overlayBrush = new SolidBrush(Color.FromArgb(150, 0, 0, 0));
+            g.FillRectangle(overlayBrush, ClientRectangle);
+
+            using var titleFont = new Font("Arial", 24, FontStyle.Bold);
+            using var hintFont = new Font("Arial", 12, FontStyle.Regular);
+            using var titleBrush = new SolidBrush(Color.White);
+            using var hintBrush = new SolidBrush(Color.LightGray);
+
+            var title = "Пауза";
+            var titleSize = g.MeasureString(title, titleFont);
+            float centerX = ClientSize.Width / 2f;
+            float topY = 180;
+            g.DrawString(title, titleFont, titleBrush, centerX - titleSize.Width / 2f, topY);
+
+            _restartButtonBounds = new Rectangle((int)centerX - 135, (int)topY + 70, 270, 56);
+            DrawMenuButton(g, _restartButtonBounds, "Начать уровень заново");
+
+            var hint = "Esc - продолжить";
+            var hintSize = g.MeasureString(hint, hintFont);
+            g.DrawString(hint, hintFont, hintBrush, centerX - hintSize.Width / 2f, topY + 145);
+        }
+
+        private void DrawMenuButton(Graphics g, Rectangle bounds, string text)
+        {
+            using var fillBrush = new SolidBrush(Color.FromArgb(35, 120, 200));
+            using var borderPen = new Pen(Color.White, 2f);
+            using var font = new Font("Arial", 13, FontStyle.Bold);
+            using var textBrush = new SolidBrush(Color.White);
+
+            g.FillRectangle(fillBrush, bounds);
+            g.DrawRectangle(borderPen, bounds);
+
+            var textSize = g.MeasureString(text, font);
+            float x = bounds.X + (bounds.Width - textSize.Width) / 2f;
+            float y = bounds.Y + (bounds.Height - textSize.Height) / 2f;
+            g.DrawString(text, font, textBrush, x, y);
+        }
+    }
+}
