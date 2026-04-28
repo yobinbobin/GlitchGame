@@ -9,18 +9,24 @@ namespace GlitchGame_WF.Models
         public int Y { get; set; }
         public int Size { get; } = 20;
         public bool Collected { get; set; }
+        public bool IsFake { get; }
+        public bool ActsAsPlatform { get; }
 
-        public Coin(int x, int y)
+        public Coin(int x, int y, bool isFake = false, bool actsAsPlatform = false)
         {
             X = x;
             Y = y;
+            IsFake = isFake;
+            ActsAsPlatform = actsAsPlatform;
         }
 
         public void Draw(Graphics g)
         {
             if (Collected)
                 return;
-            using var brush = new SolidBrush(Color.Goldenrod);
+
+            var color = IsFake ? Color.FromArgb(220, 190, 110) : Color.Goldenrod;
+            using var brush = new SolidBrush(color);
             g.FillEllipse(brush, X, Y, Size, Size);
         }
     }

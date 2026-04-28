@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Drawing;
+using System;
 using System.Windows.Forms;
 using Timer = System.Windows.Forms.Timer;
 
@@ -20,6 +21,7 @@ namespace GlitchGame_WF
         private GameUiState _uiState = GameUiState.StartScreen;
         private Rectangle _startButtonBounds = Rectangle.Empty;
         private Rectangle _restartButtonBounds = Rectangle.Empty;
+        private Rectangle _celebrationRestartBounds = Rectangle.Empty;
 
         public Form1()
         {
@@ -63,8 +65,18 @@ namespace GlitchGame_WF
                 return;
             }
 
-            _gameController.Draw(e.Graphics);
+            if (_gameController.IsCelebrationLevel)
+            {
+                DrawFireworksBackground(e.Graphics);
+                _gameController.Draw(e.Graphics);
+                DrawCelebrationReplayButton(e.Graphics);
+            }
+            else
+            {
+                _gameController.Draw(e.Graphics);
+            }
             DrawMovementHints(e.Graphics);
+            DrawCharacterSpeech(e.Graphics);
 
             if (_uiState == GameUiState.Paused)
             {
@@ -85,6 +97,17 @@ namespace GlitchGame_WF
             if (_uiState == GameUiState.Paused && _restartButtonBounds.Contains(e.Location))
             {
                 _gameController.RestartCurrentLevel();
+                _pressedKeys.Clear();
+                _uiState = GameUiState.Playing;
+                Invalidate();
+                return;
+            }
+
+            if (_uiState == GameUiState.Playing &&
+                _gameController.IsCelebrationLevel &&
+                _celebrationRestartBounds.Contains(e.Location))
+            {
+                _gameController.StartFromFirstLevel();
                 _pressedKeys.Clear();
                 _uiState = GameUiState.Playing;
                 Invalidate();
@@ -192,6 +215,98 @@ namespace GlitchGame_WF
         private bool IsUpPressed() => _pressedKeys.Contains(Keys.Up) || _pressedKeys.Contains(Keys.W) || _pressedKeys.Contains(Keys.Space);
         private bool IsDownPressed() => _pressedKeys.Contains(Keys.Down) || _pressedKeys.Contains(Keys.S);
 
+        private void DrawCharacterSpeech(Graphics g)
+        {
+            var speech = _gameController.GetCharacterSpeech();
+            if (string.IsNullOrWhiteSpace(speech))
+                return;
+
+            using var speechFont = new Font("Arial", 10, FontStyle.Regular);
+            using var textBrush = new SolidBrush(Color.Black);
+            using var bubbleBrush = new SolidBrush(Color.FromArgb(240, 255, 255, 255));
+            using var borderPen = new Pen(Color.FromArgb(30, 30, 30), 1.6f);
+
+            const int bubbleWidth = 330;
+            const int bubblePadding = 10;
+
+            int playerCenterX = (int)(_gameController.PlayerX + _gameController.PlayerWidth / 2f);
+            int bubbleX = Math.Max(8, Math.Min(ClientSize.Width - bubbleWidth - 8, playerCenterX - bubbleWidth / 2));
+            int maxTextWidth = bubbleWidth - bubblePadding * 2;
+            var textSize = g.MeasureString(speech, speechFont, maxTextWidth);
+
+            int bubbleHeight = (int)Math.Ceiling(textSize.Height) + bubblePadding * 2;
+            int bubbleY = (int)_gameController.PlayerY - bubbleHeight - 20;
+            bubbleY = Math.Max(8, bubbleY);
+
+            var bubbleRect = new Rectangle(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+            g.FillRectangle(bubbleBrush, bubbleRect);
+            g.DrawRectangle(borderPen, bubbleRect);
+
+            var textRect = new RectangleF(
+                bubbleRect.X + bubblePadding,
+                bubbleRect.Y + bubblePadding,
+                maxTextWidth,
+                bubbleRect.Height - bubblePadding * 2);
+            g.DrawString(speech, speechFont, textBrush, textRect);
+
+            int tailBaseX = Math.Max(bubbleRect.Left + 12, Math.Min(bubbleRect.Right - 12, playerCenterX));
+            int tailY = bubbleRect.Bottom;
+            Point[] tailPoints =
+            {
+                new Point(tailBaseX - 8, tailY),
+                new Point(tailBaseX + 8, tailY),
+                new Point(playerCenterX, (int)_gameController.PlayerY - 2)
+            };
+            g.FillPolygon(bubbleBrush, tailPoints);
+            g.DrawPolygon(borderPen, tailPoints);
+        }
+
+        private void DrawFireworksBackground(Graphics g)
+        {
+            var now = DateTime.UtcNow;
+            int seed = now.Second * 1000 + now.Millisecond / 20;
+            var rand = new Random(seed);
+
+            for (int i = 0; i < 6; i++)
+            {
+                int cx = rand.Next(40, Math.Max(41, ClientSize.Width - 40));
+                int cy = rand.Next(30, Math.Max(31, ClientSize.Height / 2));
+                int radius = rand.Next(20, 58);
+                var color = Color.FromArgb(
+                    170,
+                    rand.Next(80, 256),
+                    rand.Next(80, 256),
+                    rand.Next(80, 256));
+
+                using var pen = new Pen(color, 2f);
+                for (int ray = 0; ray < 12; ray++)
+                {
+                    double angle = ray * Math.PI / 6.0;
+                    int x2 = cx + (int)(Math.Cos(angle) * radius);
+                    int y2 = cy + (int)(Math.Sin(angle) * radius);
+                    g.DrawLine(pen, cx, cy, x2, y2);
+                }
+            }
+        }
+
+        private void DrawCelebrationReplayButton(Graphics g)
+        {
+            _celebrationRestartBounds = new Rectangle(ClientSize.Width - 190, ClientSize.Height - 60, 170, 36);
+            using var fillBrush = new SolidBrush(Color.FromArgb(190, 30, 95, 160));
+            using var borderPen = new Pen(Color.WhiteSmoke, 1.4f);
+            using var font = new Font("Arial", 10, FontStyle.Bold);
+            using var textBrush = new SolidBrush(Color.White);
+
+            g.FillRectangle(fillBrush, _celebrationRestartBounds);
+            g.DrawRectangle(borderPen, _celebrationRestartBounds);
+
+            const string text = "Сыграть заново";
+            var textSize = g.MeasureString(text, font);
+            float x = _celebrationRestartBounds.X + (_celebrationRestartBounds.Width - textSize.Width) / 2f;
+            float y = _celebrationRestartBounds.Y + (_celebrationRestartBounds.Height - textSize.Height) / 2f;
+            g.DrawString(text, font, textBrush, x, y);
+        }
+
         private void DrawStartScreen(Graphics g)
         {
             using var titleFont = new Font("Arial", 30, FontStyle.Bold);
@@ -209,7 +324,7 @@ namespace GlitchGame_WF
             g.DrawString(subtitle, textFont, hintBrush, centerX - subtitleSize.Width / 2f, 200);
 
             _startButtonBounds = new Rectangle((int)centerX - 110, 280, 220, 56);
-            DrawMenuButton(g, _startButtonBounds, "Начать игру");
+            DrawMenuButton(g, _startButtonBounds, "Спасти игру");
 
             var controlsHint = "Enter/Space - начать, Esc - пауза во время игры";
             var controlsSize = g.MeasureString(controlsHint, textFont);
@@ -254,6 +369,11 @@ namespace GlitchGame_WF
             float x = bounds.X + (bounds.Width - textSize.Width) / 2f;
             float y = bounds.Y + (bounds.Height - textSize.Height) / 2f;
             g.DrawString(text, font, textBrush, x, y);
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }

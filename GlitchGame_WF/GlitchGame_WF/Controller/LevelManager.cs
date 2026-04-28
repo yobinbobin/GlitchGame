@@ -45,12 +45,12 @@ namespace GlitchGame_WF.Controller
 
             foreach (var p in definition.Platforms)
             {
-                level.Platforms.Add(new Platform(p.X, p.Y, p.Width, p.Height, p.IsPhantom));
+                level.Platforms.Add(new Platform(p.X, p.Y, p.Width, p.Height, p.IsPhantom, p.IsCollectible));
             }
 
             foreach (var c in definition.Coins)
             {
-                level.Coins.Add(new Coin(c.X, c.Y));
+                level.Coins.Add(new Coin(c.X, c.Y, c.IsFake, c.ActsAsPlatform));
             }
 
             return level;
@@ -165,7 +165,106 @@ namespace GlitchGame_WF.Controller
                         new CoinDef(455, 300),
                         new CoinDef(595, 240),
                         new CoinDef(745, 180)
-                    })
+                    }),
+
+                new LevelDefinition(
+                    startX: 40,
+                    startY: 460,
+                    platforms: new[]
+                    {
+                        new PlatformDef(0, 500, 882, 20),
+                        new PlatformDef(80, 420, 120, 20),
+                        new PlatformDef(260, 360, 100, 20),
+                        new PlatformDef(420, 420, 100, 20),
+                        new PlatformDef(590, 330, 130, 20),
+                        new PlatformDef(740, 260, 90, 20)
+                    },
+                    coins: new[]
+                    {
+                        new CoinDef(105, 390),
+                        new CoinDef(280, 330),
+                        new CoinDef(450, 390, isFake: true),
+                        new CoinDef(620, 300),
+                        new CoinDef(770, 230, isFake: true),
+                        new CoinDef(320, 220)
+                    }),
+
+                new LevelDefinition(
+                    startX: 60,
+                    startY: 460,
+                    platforms: new[]
+                    {
+                        new PlatformDef(0, 500, 882, 20),
+                        new PlatformDef(130, 460, 120, 20),
+                        new PlatformDef(280, 390, 140, 20),
+                        new PlatformDef(80, 320, 120, 20),
+                        new PlatformDef(260, 260, 90, 20),
+                        new PlatformDef(470, 290, 160, 20),
+                        new PlatformDef(700, 360, 120, 20)
+                    },
+                    coins: new[]
+                    {
+                        new CoinDef(165, 430),
+                        new CoinDef(320, 360),
+                        new CoinDef(120, 290),
+                        new CoinDef(500, 260),
+                        new CoinDef(730, 330),
+                        new CoinDef(300, 230)
+                    }),
+
+                new LevelDefinition(
+                    startX: 420,
+                    startY: 460,
+                    platforms: new[]
+                    {
+                        new PlatformDef(0, 500, 882, 20),
+                        new PlatformDef(50, 420, 120, 20),
+                        new PlatformDef(710, 420, 120, 20),
+                        new PlatformDef(240, 340, 160, 20),
+                        new PlatformDef(470, 340, 160, 20),
+                        new PlatformDef(350, 240, 180, 20)
+                    },
+                    coins: new[]
+                    {
+                        new CoinDef(90, 390),
+                        new CoinDef(750, 390),
+                        new CoinDef(275, 310),
+                        new CoinDef(505, 310),
+                        new CoinDef(410, 210),
+                        new CoinDef(410, 130)
+                    }),
+
+                new LevelDefinition(
+                    startX: 50,
+                    startY: 460,
+                    platforms: new[]
+                    {
+                        new PlatformDef(0, 500, 882, 20),
+                        new PlatformDef(120, 410, 100, 20, isCollectible: true),
+                        new PlatformDef(280, 350, 110, 20, isCollectible: true),
+                        new PlatformDef(460, 390, 120, 20, isCollectible: true),
+                        new PlatformDef(620, 310, 120, 20, isCollectible: true),
+                        new PlatformDef(760, 230, 90, 20, isCollectible: true)
+                    },
+                    coins: new[]
+                    {
+                        new CoinDef(145, 385, actsAsPlatform: true),
+                        new CoinDef(310, 325, actsAsPlatform: true),
+                        new CoinDef(495, 365, actsAsPlatform: true),
+                        new CoinDef(655, 285, actsAsPlatform: true),
+                        new CoinDef(790, 205, actsAsPlatform: true),
+                        new CoinDef(380, 250, actsAsPlatform: true)
+                    }),
+
+                new LevelDefinition(
+                    startX: 426,
+                    startY: 460,
+                    platforms: new[]
+                    {
+                        new PlatformDef(0, 500, 882, 20)
+                    },
+                    coins: Array.Empty<CoinDef>()
+                    )
             };
         }
 
@@ -193,14 +292,16 @@ namespace GlitchGame_WF.Controller
             public int Width { get; }
             public int Height { get; }
             public bool IsPhantom { get; }
+            public bool IsCollectible { get; }
 
-            public PlatformDef(int x, int y, int width, int height, bool isPhantom = false)
+            public PlatformDef(int x, int y, int width, int height, bool isPhantom = false, bool isCollectible = false)
             {
                 X = x;
                 Y = y;
                 Width = width;
                 Height = height;
                 IsPhantom = isPhantom;
+                IsCollectible = isCollectible;
             }
         }
 
@@ -208,11 +309,15 @@ namespace GlitchGame_WF.Controller
         {
             public int X { get; }
             public int Y { get; }
+            public bool IsFake { get; }
+            public bool ActsAsPlatform { get; }
 
-            public CoinDef(int x, int y)
+            public CoinDef(int x, int y, bool isFake = false, bool actsAsPlatform = false)
             {
                 X = x;
                 Y = y;
+                IsFake = isFake;
+                ActsAsPlatform = actsAsPlatform;
             }
         }
     }

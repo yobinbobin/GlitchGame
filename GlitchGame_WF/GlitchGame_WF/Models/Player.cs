@@ -33,21 +33,26 @@ namespace GlitchGame_WF.Models
             g.FillRectangle(brush, (int)X, (int)Y, Width, Height);
         }
 
-        public void ApplyGravity()
+        public void ApplyGravity(bool reverseGravity = false)
         {
-            VelocityY += Gravity;
+            VelocityY += reverseGravity ? -Gravity : Gravity;
             Y += VelocityY;
             
-            // Упёрся в пол
-            if (Y > _groundY)
+            if (!reverseGravity && Y > _groundY)
             {
                 Y = _groundY;
                 VelocityY = 0;
                 IsGrounded = true;
             }
+            else if (reverseGravity && Y < 0)
+            {
+                Y = 0;
+                VelocityY = 0;
+                IsGrounded = true;
+            }
             else
             {
-                IsGrounded = false;  // в воздухе, нельзя прыгать
+                IsGrounded = false;
             }
         }
 
@@ -59,46 +64,101 @@ namespace GlitchGame_WF.Models
             }
         }
 
-        public void ApplyPlatforms(List<Platform> platforms, bool ignorePhantomPlatforms = false)
+        public void ApplyPlatforms(List<Platform> platforms, bool ignorePhantomPlatforms = false, bool reverseGravity = false)
         {
             foreach(var p in platforms)
             {
+                if (p.Collected)
+                    continue;
                 if (ignorePhantomPlatforms && p.IsPhantom)
                     continue;
 
-                if (VelocityY >= 0 && 
-                X + Width > p.X &&
-                X < p.X + p.Width &&
-                Y + Height > p.Y && 
-                Y + Height < p.Y + p.Height + VelocityY)
+                if (!reverseGravity &&
+                    VelocityY >= 0 &&
+                    X + Width > p.X &&
+                    X < p.X + p.Width &&
+                    Y + Height > p.Y &&
+                    Y + Height < p.Y + p.Height + VelocityY)
                 {
                     Y = p.Y - Height;
                     VelocityY = 0;
                     IsGrounded = true;
                 }
-                if (VelocityY < 0 &&
+                if (!reverseGravity &&
+                    VelocityY < 0 &&
                     X + Width > p.X && X < p.X + p.Width &&
                     Y < p.Y + p.Height && Y > p.Y)
                 {
                     Y = p.Y + p.Height;
                     VelocityY = 0;
                 }
+
+                if (reverseGravity &&
+                    VelocityY <= 0 &&
+                    X + Width > p.X &&
+                    X < p.X + p.Width &&
+                    Y < p.Y + p.Height &&
+                    Y > p.Y + p.Height + VelocityY - Height)
+                {
+                    Y = p.Y + p.Height;
+                    VelocityY = 0;
+                    IsGrounded = true;
+                }
             }
         }
 
-        public void CollectCoins(List<Coin> coins)
+        public void ApplyCoinPlatforms(List<Coin> coins, bool reverseGravity = false)
+        {
+            foreach (var c in coins)
+            {
+                if (!c.ActsAsPlatform || c.Collected)
+                    continue;
+
+                if (!reverseGravity &&
+                    VelocityY >= 0 &&
+                    X + Width > c.X &&
+                    X < c.X + c.Size &&
+                    Y + Height > c.Y &&
+                    Y + Height < c.Y + c.Size + VelocityY)
+                {
+                    Y = c.Y - Height;
+                    VelocityY = 0;
+                    IsGrounded = true;
+                }
+            }
+        }
+
+        public void CollectCoins(List<Coin> coins, bool ignoreFakeCoinScore = false)
         {
             foreach (var c in coins)
             {
                 if (!c.Collected)
                 {
-                    // Проверка пересечения прямоугольников
                     if (X < c.X + c.Size && X + Width > c.X &&
                         Y < c.Y + c.Size && Y + Height > c.Y)
                     {
                         c.Collected = true;
-                        Score += 10;
+                        if (!ignoreFakeCoinScore || !c.IsFake)
+                            Score += 10;
                     }
+                }
+            }
+        }
+
+        public void CollectPlatforms(List<Platform> platforms)
+        {
+            foreach (var p in platforms)
+            {
+                if (p.Collected || !p.IsCollectible)
+                    continue;
+
+                if (X < p.X + p.Width &&
+                    X + Width > p.X &&
+                    Y < p.Y + p.Height &&
+                    Y + Height > p.Y)
+                {
+                    p.Collected = true;
+                    Score += 10;
                 }
             }
         }

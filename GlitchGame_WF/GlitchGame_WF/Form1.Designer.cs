@@ -42,6 +42,7 @@ namespace GlitchGame_WF
             MaximizeBox = false;
             Name = "Form1";
             Text = "Платформер";
+            Load += Form1_Load;
             ResumeLayout(false);
         }
 

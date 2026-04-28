@@ -9,19 +9,25 @@ namespace GlitchGame_WF.Models
         public int Width { get; set; }
         public int Height { get; set; }
         public bool IsPhantom { get; set; }
+        public bool IsCollectible { get; set; }
+        public bool Collected { get; set; }
 
-        public Platform(int x, int y, int width, int height, bool isPhantom = false)
+        public Platform(int x, int y, int width, int height, bool isPhantom = false, bool isCollectible = false)
         {
             X = x;
             Y = y;
             Width = width;
             Height = height;
             IsPhantom = isPhantom;
+            IsCollectible = isCollectible;
         }
 
         public void Draw(Graphics g)
         {
-            using var brush = new SolidBrush(IsPhantom ? Color.FromArgb(130, 180, 180, 180) : Color.Crimson);
+            if (Collected)
+                return;
+
+            using var brush = new SolidBrush(Color.Crimson);
             g.FillRectangle(brush, X, Y, Width, Height);
         }
     }
