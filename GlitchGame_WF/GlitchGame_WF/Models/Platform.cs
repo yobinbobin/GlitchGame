@@ -33,8 +33,8 @@ namespace GlitchGame_WF.Models
                 return;
             }
 
-            using var brush = new SolidBrush(Color.Crimson);
-            g.FillRectangle(brush, X, Y, Width, Height);
+            using var solidBrush = new SolidBrush(Color.Crimson);
+            g.FillRectangle(solidBrush, X, Y, Width, Height);
         }
     }
 }

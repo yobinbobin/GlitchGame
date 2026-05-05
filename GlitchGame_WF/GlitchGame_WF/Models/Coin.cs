@@ -20,14 +20,15 @@ namespace GlitchGame_WF.Models
             ActsAsPlatform = actsAsPlatform;
         }
 
-        public void Draw(Graphics g, Image? sprite = null)
+        public void Draw(Graphics g, Image? sprite = null, float renderScale = 1f)
         {
             if (Collected)
                 return;
 
             if (sprite is not null)
             {
-                g.DrawImage(sprite, X, Y, Size, Size);
+                int s = (int)(Size * renderScale);
+                g.DrawImage(sprite, X, Y, s, s);
                 return;
             }
 

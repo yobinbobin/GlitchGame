@@ -7,18 +7,33 @@ namespace GlitchGame_WF.Models
         public float X { get; set; }
         public float Y { get; set; }
         public float VelocityY { get; set; }
+        public bool FacingRight { get; private set; } = true;
         
-        public int Width { get; } = 30;
-        public int Height { get; } = 40;
+        public int Width { get; } = 45;
+        public int Height { get; } = 60;
     
         private const float Gravity = 0.5f;
         private int _groundY = 500;
+        public int GroundY
+        {
+            get => _groundY;
+            set => _groundY = value;
+        }
         public float VelocityX { get; set; }
         public bool IsGrounded { get; set; }
 
         private const float BaseMoveSpeed = 5f;
-        public void MoveLeft(float speedMultiplier = 1f) => X -= BaseMoveSpeed * speedMultiplier;
-        public void MoveRight(float speedMultiplier = 1f) => X += BaseMoveSpeed * speedMultiplier;
+        public void MoveLeft(float speedMultiplier = 1f)
+        {
+            FacingRight = false;
+            X -= BaseMoveSpeed * speedMultiplier;
+        }
+
+        public void MoveRight(float speedMultiplier = 1f)
+        {
+            FacingRight = true;
+            X += BaseMoveSpeed * speedMultiplier;
+        }
         public int Score { get; set; }
 
         public Player()
@@ -27,11 +42,34 @@ namespace GlitchGame_WF.Models
             Y = _groundY - Height;
         }
 
-        public void Draw(Graphics g, Image? sprite = null)
+        public void Draw(Graphics g, Image? sprite = null, float renderScale = 1f)
         {
             if (sprite is not null)
             {
-                g.DrawImage(sprite, (int)X, (int)Y, Width, Height);
+                int w = (int)(Width * renderScale);
+                int h = (int)(Height * renderScale);
+                // Якорим спрайт по "ногам" (нижней границе хитбокса),
+                // чтобы при увеличении renderScale игрок визуально не "проваливался" в платформы.
+                int drawY = (int)(Y - (h - Height));
+                int drawX = (int)X;
+                if (FacingRight)
+                {
+                    g.DrawImage(sprite, drawX, drawY, w, h);
+                }
+                else
+                {
+                    var oldTransform = g.Transform;
+                    try
+                    {
+                        g.TranslateTransform(drawX + w, drawY);
+                        g.ScaleTransform(-1, 1);
+                        g.DrawImage(sprite, 0, 0, w, h);
+                    }
+                    finally
+                    {
+                        g.Transform = oldTransform;
+                    }
+                }
                 return;
             }
 
@@ -44,9 +82,10 @@ namespace GlitchGame_WF.Models
             VelocityY += reverseGravity ? -Gravity : Gravity;
             Y += VelocityY;
             
-            if (!reverseGravity && Y > _groundY)
+            float groundTopY = _groundY - Height;
+            if (!reverseGravity && Y > groundTopY)
             {
-                Y = _groundY;
+                Y = groundTopY;
                 VelocityY = 0;
                 IsGrounded = true;
             }
@@ -66,7 +105,7 @@ namespace GlitchGame_WF.Models
         {
             if (IsGrounded)
             {
-                VelocityY = -12f;
+                VelocityY = -13f;
             }
         }
 

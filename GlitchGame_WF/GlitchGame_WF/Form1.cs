@@ -69,7 +69,6 @@ namespace GlitchGame_WF
                 return;
             }
 
-            var degradation = _gameController.GetRenderDegradation();
             using var sceneBuffer = new Bitmap(Math.Max(1, ClientSize.Width), Math.Max(1, ClientSize.Height));
             using (var sceneGraphics = Graphics.FromImage(sceneBuffer))
             {
@@ -78,10 +77,8 @@ namespace GlitchGame_WF
                 DrawScene(sceneGraphics);
             }
 
-            using var degradedFrame = ApplyRenderDegradation(sceneBuffer, degradation);
-            int jitterX = degradation.JitterPixels > 0 ? _fxRandom.Next(-degradation.JitterPixels, degradation.JitterPixels + 1) : 0;
-            int jitterY = degradation.JitterPixels > 0 ? _fxRandom.Next(-degradation.JitterPixels, degradation.JitterPixels + 1) : 0;
-            e.Graphics.DrawImage(degradedFrame, jitterX, jitterY, sceneBuffer.Width, sceneBuffer.Height);
+            // Визуальные пост-эффекты "глюков" временно отключены.
+            e.Graphics.DrawImage(sceneBuffer, 0, 0, sceneBuffer.Width, sceneBuffer.Height);
         }
 
         private void DrawScene(Graphics g)
@@ -530,7 +527,7 @@ namespace GlitchGame_WF
 
             g.FillRectangle(fillBrush, bounds);
             g.DrawRectangle(borderPen, bounds);
-
+            
             var textSize = g.MeasureString(text, font);
             float x = bounds.X + (bounds.Width - textSize.Width) / 2f;
             float y = bounds.Y + (bounds.Height - textSize.Height) / 2f;

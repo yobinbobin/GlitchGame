@@ -10,6 +10,7 @@ namespace GlitchGame_WF.Controller
 {
     public class GameController
     {
+        private const int WorldWidth = 882;
         private Player _player = null!;
         private Level _currentLevel = null!;
         private readonly LevelManager _levelManager;
@@ -26,6 +27,8 @@ namespace GlitchGame_WF.Controller
         private Image? _platformSprite;
         private Image? _coinSprite;
         private Image? _backgroundSprite;
+        private float _playerRenderScale = 1f;
+        private float _coinRenderScale = 1f;
 
         public int Score => _player.Score;
         public int CurrentLevelNumber => _levelManager.CurrentLevelNumber;
@@ -35,6 +38,8 @@ namespace GlitchGame_WF.Controller
         public bool IsCelebrationLevel => CurrentLevelNumber == 10;
         public bool IsPhantomCollisionModeEnabled => ShouldIgnorePhantomPlatforms();
         public Image? BackgroundSprite => _backgroundSprite;
+        public float PlayerRenderScale => _playerRenderScale;
+        public float CoinRenderScale => _coinRenderScale;
         public RenderDegradation GetRenderDegradation()
         {
             var levelFactor = Math.Clamp((CurrentLevelNumber - 1) / 9f, 0f, 1f);
@@ -65,7 +70,7 @@ namespace GlitchGame_WF.Controller
         public GameController()
         {
             _levelManager = new LevelManager();
-            LoadSprites();
+            LoadSpritesForLevel(1);
             _glitches.Add(new Glitch("Inverted controls", activationLevel: 2, invertHorizontalInput: true));
             _glitches.Add(new Glitch("Input lag", activationLevel: 3, inputLagFrames: 20));
             _glitches.Add(new Glitch("Hyper speed", activationLevel: 4, moveSpeedMultiplier: 5.6f));
@@ -141,6 +146,9 @@ namespace GlitchGame_WF.Controller
             }
 
             HandleTeleportGlitch();
+
+            // Невидимые "стенки" по краям экрана
+            _player.X = Math.Clamp(_player.X, 0, WorldWidth - _player.Width);
         }
 
         public void Draw(Graphics g)
@@ -149,9 +157,9 @@ namespace GlitchGame_WF.Controller
                 platform.Draw(g, _platformSprite);
 
             foreach (var coin in _currentLevel.Coins)
-                coin.Draw(g, _coinSprite);
+                coin.Draw(g, _coinSprite, _coinRenderScale);
 
-            _player.Draw(g, _playerSprite);
+            _player.Draw(g, _playerSprite, _playerRenderScale);
 
             using var font = new Font("Arial", 16);
             using var brush = new SolidBrush(Color.White);
@@ -257,6 +265,7 @@ namespace GlitchGame_WF.Controller
                 X = _currentLevel.StartX,
                 Y = _currentLevel.StartY
             };
+            _player.GroundY = _currentLevel.GroundY;
             _inputBuffer.Clear();
             _positionHistory.Clear();
             _isReverseGravityEnabled = false;
@@ -265,6 +274,7 @@ namespace GlitchGame_WF.Controller
             _lastTeleportUtc = _levelStartedUtc;
             _lastCelebrationJumpUtc = _levelStartedUtc;
             _speechBubble = BuildSpeechBubbleForLevel(CurrentLevelNumber, _levelStartedUtc);
+            LoadSpritesForLevel(CurrentLevelNumber);
         }
 
         private void HandleTeleportGlitch()
@@ -331,13 +341,26 @@ namespace GlitchGame_WF.Controller
             return new SpeechBubble(text, levelStartUtc, TimeSpan.FromSeconds(5));
         }
 
-        private void LoadSprites()
+        private void LoadSpritesForLevel(int levelNumber)
         {
             var spriteFolder = ResolveSpriteFolder();
-            _playerSprite = TryLoadImage(spriteFolder, "robot1.png");
-            _platformSprite = TryLoadImage(spriteFolder, "platfrom1.png");
-            _coinSprite = TryLoadImage(spriteFolder, "money1.png");
-            _backgroundSprite = TryLoadImage(spriteFolder, "bacground1.png");
+            int tier = levelNumber <= 3 ? 1 : levelNumber <= 6 ? 2 : levelNumber <= 9 ? 3 : 3;
+
+            _playerSprite = TryLoadFirst(spriteFolder, $"robot{tier}.png");
+            _coinSprite = TryLoadFirst(spriteFolder, $"money{tier}.png");
+            _platformSprite = TryLoadFirst(spriteFolder, $"platfrom{tier}.png", $"paltfrom{tier}.png");
+            _backgroundSprite = TryLoadFirst(spriteFolder, $"background{tier}.png", $"bacground{tier}.png");
+
+            // ВАЖНО: масштаб робота держим ~= хитбоксу (иначе кажется, что проходит сквозь платформы).
+            _playerRenderScale = 1.0f;
+
+            // Монетки можно чуть увеличить визуально, не ломая коллизии.
+            _coinRenderScale = tier switch
+            {
+                1 => 1.35f,
+                2 => 1.25f,
+                _ => 1.15f
+            };
         }
 
         private static string ResolveSpriteFolder()
@@ -367,6 +390,17 @@ namespace GlitchGame_WF.Controller
             {
                 return null;
             }
+        }
+
+        private static Image? TryLoadFirst(string folder, params string[] candidates)
+        {
+            foreach (var name in candidates)
+            {
+                var img = TryLoadImage(folder, name);
+                if (img is not null)
+                    return img;
+            }
+            return null;
         }
 
         private readonly struct PlayerSnapshot
