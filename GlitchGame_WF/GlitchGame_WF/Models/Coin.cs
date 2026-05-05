@@ -20,10 +20,16 @@ namespace GlitchGame_WF.Models
             ActsAsPlatform = actsAsPlatform;
         }
 
-        public void Draw(Graphics g)
+        public void Draw(Graphics g, Image? sprite = null)
         {
             if (Collected)
                 return;
+
+            if (sprite is not null)
+            {
+                g.DrawImage(sprite, X, Y, Size, Size);
+                return;
+            }
 
             var color = IsFake ? Color.FromArgb(220, 190, 110) : Color.Goldenrod;
             using var brush = new SolidBrush(color);

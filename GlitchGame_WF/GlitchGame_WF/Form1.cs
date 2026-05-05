@@ -1,8 +1,11 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Windows.Forms;
 using Timer = System.Windows.Forms.Timer;
+using GlitchGame_WF.Models;
 
 namespace GlitchGame_WF
 {
@@ -22,6 +25,7 @@ namespace GlitchGame_WF
         private Rectangle _startButtonBounds = Rectangle.Empty;
         private Rectangle _restartButtonBounds = Rectangle.Empty;
         private Rectangle _celebrationRestartBounds = Rectangle.Empty;
+        private readonly Random _fxRandom = new Random();
 
         public Form1()
         {
@@ -65,23 +69,51 @@ namespace GlitchGame_WF
                 return;
             }
 
+            var degradation = _gameController.GetRenderDegradation();
+            using var sceneBuffer = new Bitmap(Math.Max(1, ClientSize.Width), Math.Max(1, ClientSize.Height));
+            using (var sceneGraphics = Graphics.FromImage(sceneBuffer))
+            {
+                sceneGraphics.SmoothingMode = SmoothingMode.AntiAlias;
+                sceneGraphics.Clear(Color.Black);
+                DrawScene(sceneGraphics);
+            }
+
+            using var degradedFrame = ApplyRenderDegradation(sceneBuffer, degradation);
+            int jitterX = degradation.JitterPixels > 0 ? _fxRandom.Next(-degradation.JitterPixels, degradation.JitterPixels + 1) : 0;
+            int jitterY = degradation.JitterPixels > 0 ? _fxRandom.Next(-degradation.JitterPixels, degradation.JitterPixels + 1) : 0;
+            e.Graphics.DrawImage(degradedFrame, jitterX, jitterY, sceneBuffer.Width, sceneBuffer.Height);
+        }
+
+        private void DrawScene(Graphics g)
+        {
+            DrawLevelBackground(g);
+
             if (_gameController.IsCelebrationLevel)
             {
-                DrawFireworksBackground(e.Graphics);
-                _gameController.Draw(e.Graphics);
-                DrawCelebrationReplayButton(e.Graphics);
+                DrawFireworksBackground(g);
+                _gameController.Draw(g);
+                DrawCelebrationReplayButton(g);
             }
             else
             {
-                _gameController.Draw(e.Graphics);
+                _gameController.Draw(g);
             }
-            DrawMovementHints(e.Graphics);
-            DrawCharacterSpeech(e.Graphics);
+            DrawMovementHints(g);
+            DrawCharacterSpeech(g);
 
             if (_uiState == GameUiState.Paused)
             {
-                DrawPauseMenu(e.Graphics);
+                DrawPauseMenu(g);
             }
+        }
+
+        private void DrawLevelBackground(Graphics g)
+        {
+            var background = _gameController.BackgroundSprite;
+            if (background is null)
+                return;
+
+            g.DrawImage(background, new Rectangle(0, 0, ClientSize.Width, ClientSize.Height));
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -305,6 +337,140 @@ namespace GlitchGame_WF
             float x = _celebrationRestartBounds.X + (_celebrationRestartBounds.Width - textSize.Width) / 2f;
             float y = _celebrationRestartBounds.Y + (_celebrationRestartBounds.Height - textSize.Height) / 2f;
             g.DrawString(text, font, textBrush, x, y);
+        }
+
+        private Bitmap ApplyRenderDegradation(Bitmap source, RenderDegradation degradation)
+        {
+            var working = new Bitmap(source.Width, source.Height);
+            using (var g = Graphics.FromImage(working))
+            {
+                g.DrawImage(source, 0, 0, source.Width, source.Height);
+            }
+
+            if (degradation.PixelScale > 1)
+            {
+                int lowW = Math.Max(1, source.Width / degradation.PixelScale);
+                int lowH = Math.Max(1, source.Height / degradation.PixelScale);
+
+                using var lowRes = new Bitmap(lowW, lowH);
+                using (var gLow = Graphics.FromImage(lowRes))
+                {
+                    gLow.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                    gLow.DrawImage(working, 0, 0, lowW, lowH);
+                }
+
+                using var repixelated = new Bitmap(source.Width, source.Height);
+                using (var gUp = Graphics.FromImage(repixelated))
+                {
+                    gUp.InterpolationMode = InterpolationMode.NearestNeighbor;
+                    gUp.PixelOffsetMode = PixelOffsetMode.Half;
+                    gUp.DrawImage(lowRes, 0, 0, source.Width, source.Height);
+                }
+
+                working.Dispose();
+                working = new Bitmap(repixelated);
+            }
+
+            ApplyColorDegrade(working, degradation.DesaturationAmount);
+            DrawScanlines(working, degradation.ScanlineAlpha);
+            DrawNoise(working, degradation.NoiseDots);
+            ApplyChannelShift(working, degradation.ChannelShiftPixels);
+
+            return working;
+        }
+
+        private static void ApplyColorDegrade(Bitmap image, float desaturationAmount)
+        {
+            desaturationAmount = Math.Max(0f, Math.Min(1f, desaturationAmount));
+            float rw = 0.3086f;
+            float gw = 0.6094f;
+            float bw = 0.0820f;
+            float s = 1f - desaturationAmount;
+
+            var matrix = new ColorMatrix(new[]
+            {
+                new[] { rw + (1f - rw) * s, rw * (1f - s), rw * (1f - s), 0f, 0f },
+                new[] { gw * (1f - s), gw + (1f - gw) * s, gw * (1f - s), 0f, 0f },
+                new[] { bw * (1f - s), bw * (1f - s), bw + (1f - bw) * s, 0f, 0f },
+                new[] { 0f, 0f, 0f, 1f, 0f },
+                new[] { -0.02f, -0.02f, -0.02f, 0f, 1f }
+            });
+
+            using var temp = new Bitmap(image.Width, image.Height);
+            using (var g = Graphics.FromImage(temp))
+            using (var attributes = new ImageAttributes())
+            {
+                attributes.SetColorMatrix(matrix);
+                g.DrawImage(image, new Rectangle(0, 0, image.Width, image.Height), 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
+            }
+
+            using var gWrite = Graphics.FromImage(image);
+            gWrite.DrawImage(temp, 0, 0);
+        }
+
+        private void DrawScanlines(Bitmap image, int alpha)
+        {
+            if (alpha <= 0)
+                return;
+
+            using var g = Graphics.FromImage(image);
+            using var pen = new Pen(Color.FromArgb(Math.Min(alpha, 140), 0, 0, 0), 1f);
+            for (int y = 0; y < image.Height; y += 2)
+            {
+                g.DrawLine(pen, 0, y, image.Width, y);
+            }
+        }
+
+        private void DrawNoise(Bitmap image, int dots)
+        {
+            if (dots <= 0)
+                return;
+
+            using var g = Graphics.FromImage(image);
+            for (int i = 0; i < dots; i++)
+            {
+                int x = _fxRandom.Next(image.Width);
+                int y = _fxRandom.Next(image.Height);
+                int size = _fxRandom.Next(1, 3);
+                int a = _fxRandom.Next(40, 130);
+                var c = _fxRandom.NextDouble() > 0.5
+                    ? Color.FromArgb(a, 255, 255, 255)
+                    : Color.FromArgb(a, 0, 0, 0);
+                using var brush = new SolidBrush(c);
+                g.FillRectangle(brush, x, y, size, size);
+            }
+        }
+
+        private static void ApplyChannelShift(Bitmap image, int shift)
+        {
+            if (shift <= 0)
+                return;
+
+            using var source = new Bitmap(image);
+            using var g = Graphics.FromImage(image);
+            g.Clear(Color.Black);
+
+            using var redAttr = BuildTintAttributes(1f, 0f, 0f, 0.28f);
+            using var blueAttr = BuildTintAttributes(0f, 0f, 1f, 0.24f);
+            g.DrawImage(source, new Rectangle(-shift, 0, image.Width, image.Height), 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, redAttr);
+            g.DrawImage(source, new Rectangle(shift, 0, image.Width, image.Height), 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, blueAttr);
+            g.DrawImage(source, 0, 0, image.Width, image.Height);
+        }
+
+        private static ImageAttributes BuildTintAttributes(float r, float g, float b, float alpha)
+        {
+            var matrix = new ColorMatrix(new[]
+            {
+                new[] { r, 0f, 0f, 0f, 0f },
+                new[] { 0f, g, 0f, 0f, 0f },
+                new[] { 0f, 0f, b, 0f, 0f },
+                new[] { 0f, 0f, 0f, alpha, 0f },
+                new[] { 0f, 0f, 0f, 0f, 1f }
+            });
+
+            var attributes = new ImageAttributes();
+            attributes.SetColorMatrix(matrix);
+            return attributes;
         }
 
         private void DrawStartScreen(Graphics g)

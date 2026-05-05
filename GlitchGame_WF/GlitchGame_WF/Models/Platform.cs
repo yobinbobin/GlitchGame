@@ -22,10 +22,16 @@ namespace GlitchGame_WF.Models
             IsCollectible = isCollectible;
         }
 
-        public void Draw(Graphics g)
+        public void Draw(Graphics g, Image? sprite = null)
         {
             if (Collected)
                 return;
+
+            if (sprite is not null)
+            {
+                g.DrawImage(sprite, X, Y, Width, Height);
+                return;
+            }
 
             using var brush = new SolidBrush(Color.Crimson);
             g.FillRectangle(brush, X, Y, Width, Height);

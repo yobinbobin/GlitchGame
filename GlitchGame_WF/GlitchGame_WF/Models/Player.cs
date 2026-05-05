@@ -27,8 +27,14 @@ namespace GlitchGame_WF.Models
             Y = _groundY - Height;
         }
 
-        public void Draw(Graphics g)
+        public void Draw(Graphics g, Image? sprite = null)
         {
+            if (sprite is not null)
+            {
+                g.DrawImage(sprite, (int)X, (int)Y, Width, Height);
+                return;
+            }
+
             using var brush = new SolidBrush(Color.Blue);
             g.FillRectangle(brush, (int)X, (int)Y, Width, Height);
         }

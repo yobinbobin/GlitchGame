@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using System;
+using System.IO;
 using GlitchGame_WF.Models;
 
 namespace GlitchGame_WF.Controller
@@ -21,6 +22,10 @@ namespace GlitchGame_WF.Controller
         private DateTime _lastCelebrationJumpUtc;
         private bool _isReverseGravityEnabled;
         private bool _wasJumpPressed;
+        private Image? _playerSprite;
+        private Image? _platformSprite;
+        private Image? _coinSprite;
+        private Image? _backgroundSprite;
 
         public int Score => _player.Score;
         public int CurrentLevelNumber => _levelManager.CurrentLevelNumber;
@@ -29,10 +34,38 @@ namespace GlitchGame_WF.Controller
         public int PlayerWidth => _player.Width;
         public bool IsCelebrationLevel => CurrentLevelNumber == 10;
         public bool IsPhantomCollisionModeEnabled => ShouldIgnorePhantomPlatforms();
+        public Image? BackgroundSprite => _backgroundSprite;
+        public RenderDegradation GetRenderDegradation()
+        {
+            var levelFactor = Math.Clamp((CurrentLevelNumber - 1) / 9f, 0f, 1f);
+            var levelElapsedSeconds = (float)(DateTime.UtcNow - _levelStartedUtc).TotalSeconds;
+            var timeFactor = Math.Clamp(levelElapsedSeconds / 28f, 0f, 1f);
+            var intensity = Math.Clamp(levelFactor * 0.78f + timeFactor * 0.22f, 0f, 1f);
+
+            int pixelScale =
+                intensity < 0.14f ? 1 :
+                intensity < 0.34f ? 2 :
+                intensity < 0.58f ? 3 : 4;
+
+            int noiseDots = (int)(18 + intensity * 230);
+            int scanlineAlpha = (int)(intensity * 100);
+            int jitterPixels = intensity < 0.5f ? 0 : (int)Math.Ceiling((intensity - 0.45f) * 3.3f);
+            int channelShiftPixels = intensity < 0.56f ? 0 : (int)Math.Ceiling((intensity - 0.5f) * 4.5f);
+            float desaturationAmount = 0.06f + intensity * 0.68f;
+
+            return new RenderDegradation(
+                pixelScale,
+                noiseDots,
+                scanlineAlpha,
+                jitterPixels,
+                channelShiftPixels,
+                desaturationAmount);
+        }
 
         public GameController()
         {
             _levelManager = new LevelManager();
+            LoadSprites();
             _glitches.Add(new Glitch("Inverted controls", activationLevel: 2, invertHorizontalInput: true));
             _glitches.Add(new Glitch("Input lag", activationLevel: 3, inputLagFrames: 20));
             _glitches.Add(new Glitch("Hyper speed", activationLevel: 4, moveSpeedMultiplier: 5.6f));
@@ -113,12 +146,12 @@ namespace GlitchGame_WF.Controller
         public void Draw(Graphics g)
         {
             foreach (var platform in _currentLevel.Platforms)
-                platform.Draw(g);
+                platform.Draw(g, _platformSprite);
 
             foreach (var coin in _currentLevel.Coins)
-                coin.Draw(g);
+                coin.Draw(g, _coinSprite);
 
-            _player.Draw(g);
+            _player.Draw(g, _playerSprite);
 
             using var font = new Font("Arial", 16);
             using var brush = new SolidBrush(Color.White);
@@ -296,6 +329,44 @@ namespace GlitchGame_WF.Controller
                 return null;
 
             return new SpeechBubble(text, levelStartUtc, TimeSpan.FromSeconds(5));
+        }
+
+        private void LoadSprites()
+        {
+            var spriteFolder = ResolveSpriteFolder();
+            _playerSprite = TryLoadImage(spriteFolder, "robot1.png");
+            _platformSprite = TryLoadImage(spriteFolder, "platfrom1.png");
+            _coinSprite = TryLoadImage(spriteFolder, "money1.png");
+            _backgroundSprite = TryLoadImage(spriteFolder, "bacground1.png");
+        }
+
+        private static string ResolveSpriteFolder()
+        {
+            var current = Path.Combine(AppContext.BaseDirectory, "sprites");
+            if (Directory.Exists(current))
+                return current;
+
+            var projectLocal = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "sprites"));
+            if (Directory.Exists(projectLocal))
+                return projectLocal;
+
+            return Path.Combine(AppContext.BaseDirectory, "sprites");
+        }
+
+        private static Image? TryLoadImage(string folder, string fileName)
+        {
+            var path = Path.Combine(folder, fileName);
+            if (!File.Exists(path))
+                return null;
+
+            try
+            {
+                return Image.FromFile(path);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private readonly struct PlayerSnapshot
